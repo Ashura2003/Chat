@@ -29,6 +29,10 @@ const userSchema = new mongoose.Schema(
       type: String,
         default: "default_user_profile.jpg",
     },
+    friends: {
+        type: Array,
+        default: [],
+    }
   },
   {
     timestamps: true,

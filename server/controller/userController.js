@@ -15,7 +15,7 @@ const registerUser = async (req, res) => {
   try {
     // Check if the user has uploaded a profile picture
     if (req.file) {
-        profilePicture = req.file.filename;
+      profilePicture = req.file.filename;
     }
 
     // Deconstruct the request body
@@ -161,7 +161,41 @@ const getCurrentUser = async (req, res) => {
   }
 };
 
+const addFriend = async (req, res) => {
+  try {
+    const { friendId } = req.body;
+    const user = await userModel.findById(req.user.id);
+    const friend = await userModel.findById(friendId);
+
+    if (!friend) {
+      return res.status(400).json({
+        success: false,
+        message: "Friend not found",
+      });
+    }
+
+    if (user.friends.includes(friendId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Friend already added",
+      });
+    }
+
+    user.friends.push(friendId);
+    friend.friends.push(req.user.id);
+
+    await user.save();
+    await friend.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Friend added successfully",
+    });
+  } catch (error) {}
+};
+
 module.exports = {
   registerUser,
   loginUser,
+  getCurrentUser,
 };
