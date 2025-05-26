@@ -5,6 +5,8 @@ const bcrypt = require("bcrypt");
 
 const jwt = require("jsonwebtoken");
 
+const fs = require("fs");
+
 // Variables
 let passwordAttempt = 0;
 
@@ -161,6 +163,129 @@ const getCurrentUser = async (req, res) => {
   }
 };
 
+const editUser = async (req, res) => {
+  try {
+    const { firstName, lastName, email, phone } = req.body;
+    const existingUser = await userModel.findById(req.user.id);
+    if (!existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    let updatedFields = {
+      firstName: firstName || existingUser.firstName,
+      lastName: lastName || existingUser.lastName,
+      email: email || existingUser.email,
+      phone: phone || existingUser.phone,
+      profilePic: existingUser.profilePic,
+    };
+
+    // Handle file upload
+    if (req.file) {
+      const newImage = req.file.filename;
+
+      // Delete the old image
+      if (existingUser.profilePic) {
+        const oldImage = path.join(
+          __dirname,
+          `../public/uploads/${existingUser.profilePic}`
+        );
+        if (fs.existsSync(oldImage)) {
+          fs.unlinkSync(oldImage);
+        }
+      }
+
+      if (req.file) {
+        existingUser.profilePic = req.file.filename;
+      }
+
+      updatedFields.profilePic = newImage;
+    }
+
+    try {
+      const updatedUser = await userModel.findByIdAndUpdate(
+        req.params.id,
+        updatedFields,
+        { new: true, runValidators: true }
+      );
+
+      if (updatedUser) {
+        return res.status(200).json({
+          success: true,
+          message: "User updated",
+        });
+      }
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: "Error updating user",
+        error: error,
+      });
+    }
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error,
+    });
+  }
+};
+
+const sendFriendRequest = async (req, res) => {
+  try {
+    const { friendId } = req.body;
+    const user = await userModel.findById(req.user.id);
+    const friend = await userModel.findById(friendId);
+
+    if (!friend) {
+      return res.status(400).json({
+        success: false,
+        message: "Friend not found",
+      });
+    }
+
+    if (user.friends.includes(friendId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Friend already added",
+      });
+    }
+
+    if (user.friendRequests.includes(friendId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Friend request already sent",
+      });
+    }
+
+    try {
+      user.friendRequests.push(friendId);
+      await user.save();
+      friend.friendRequests.push(req.user.id);
+      await friend.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "Friend request sent",
+      });
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: "Error sending friend request",
+        error: error,
+      });
+    }
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error,
+    });
+  }
+};
+
 const addFriend = async (req, res) => {
   try {
     const { friendId } = req.body;
@@ -191,11 +316,61 @@ const addFriend = async (req, res) => {
       success: true,
       message: "Friend added successfully",
     });
-  } catch (error) {}
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error,
+    });
+  }
+};
+
+const removeFriend = async (req, res) => {
+  try {
+    const { friendId } = req.body;
+    const user = await userModel.findById(req.user.id);
+    const friend = await userModel.findById(friendId);
+
+    if (!user.friends.includes(friendId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Friend not found",
+      });
+    }
+
+    try {
+      user.friends.pop(friendId);
+      friend.friends.pop(req.user.id);
+
+      await user.save();
+      await friend.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "Friend removed successfully",
+      });
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: "Error removing friend",
+        error: error,
+      });
+    }
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error,
+    });
+  }
 };
 
 module.exports = {
   registerUser,
   loginUser,
+  editUser,
+  addFriend,
+  removeFriend,
+  friendRequest: sendFriendRequest,
   getCurrentUser,
 };
